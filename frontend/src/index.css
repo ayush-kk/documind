@@ -1,0 +1,116 @@
+/* DocuMind Global Styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Custom scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #162850;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: #FBBF24; }
+
+/* ── Base ─────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: #050A18;
+  color: #E2E8F0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* ── Noise texture overlay (subtle grain) ─────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.4;
+}
+
+/* ── Typography helpers ───────────────────────────────────── */
+.font-display { font-family: 'Syne', sans-serif; }
+.font-mono    { font-family: 'JetBrains Mono', monospace; }
+
+/* ── Markdown prose styling ───────────────────────────────── */
+.prose-documind {
+  line-height: 1.7;
+  font-size: 0.925rem;
+}
+.prose-documind p   { margin-bottom: 0.75rem; }
+.prose-documind ul  { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+.prose-documind ol  { list-style: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+.prose-documind li  { margin-bottom: 0.25rem; }
+.prose-documind strong { color: #FBBF24; font-weight: 600; }
+.prose-documind code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  background: #0F1E3C;
+  border: 1px solid #162850;
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  color: #93C5FD;
+}
+.prose-documind pre {
+  background: #0A1428;
+  border: 1px solid #162850;
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+.prose-documind pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+.prose-documind h1,
+.prose-documind h2,
+.prose-documind h3 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  color: #F1F5F9;
+  margin-bottom: 0.5rem;
+  margin-top: 1rem;
+}
+.prose-documind blockquote {
+  border-left: 3px solid #FBBF24;
+  padding-left: 1rem;
+  color: #94A3B8;
+  font-style: italic;
+  margin: 0.75rem 0;
+}
+
+/* ── Animated gradient border ─────────────────────────────── */
+.gradient-border {
+  position: relative;
+  border-radius: 12px;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #FBBF24 0%, #162850 50%, #0A1428 100%);
+  z-index: -1;
+  opacity: 0.6;
+}
+
+/* ── Glow effect ──────────────────────────────────────────── */
+.amber-glow {
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.15),
+              0 0 60px rgba(251, 191, 36, 0.05);
+}
+
+/* ── Upload drop zone active ──────────────────────────────── */
+.dropzone-active {
+  border-color: #FBBF24 !important;
+  background: rgba(251, 191, 36, 0.05) !important;
+}
