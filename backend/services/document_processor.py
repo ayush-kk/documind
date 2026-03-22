@@ -20,7 +20,7 @@ from typing import List, Tuple
 
 import docx                          # python-docx
 from pypdf import PdfReader          # pypdf (actively maintained fork of PyPDF2)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
 
