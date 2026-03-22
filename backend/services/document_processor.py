@@ -110,7 +110,7 @@ class DocumentProcessor:
     # Private extractors
     # ------------------------------------------------------------------
 
-    def _extract_pdf(self, file_bytes: bytes) -> List[Tuple[str, int]]:
+    def _extract_pdf(self, file_bytes: bytes) -> List[Tuple[str, int | None]]:
         """
         Extract text page-by-page from a PDF.
 
@@ -118,7 +118,7 @@ class DocumentProcessor:
             List of (text, page_number) tuples. Page numbers are 1-indexed.
         """
         reader = PdfReader(io.BytesIO(file_bytes))
-        pages: List[Tuple[str, int]] = []
+        pages: List[Tuple[str, int | None]] = []
 
         for i, page in enumerate(reader.pages, start=1):
             text = page.extract_text() or ""
@@ -131,7 +131,7 @@ class DocumentProcessor:
 
         return pages
 
-    def _extract_docx(self, file_bytes: bytes) -> List[Tuple[str, int]]:
+    def _extract_docx(self, file_bytes: bytes) -> List[Tuple[str, int | None]]:
         """
         Extract text from a DOCX file. DOCX has no native page concept,
         so all paragraphs are treated as page 1.
@@ -144,7 +144,7 @@ class DocumentProcessor:
             raise ValueError("DOCX appears to contain no text.")
         return [(full_text, None)]  # no page numbers for DOCX
 
-    def _extract_txt(self, file_bytes: bytes) -> List[Tuple[str, int]]:
+    def _extract_txt(self, file_bytes: bytes) -> List[Tuple[str, int | None]]:
         """Extract plain text — used for .txt uploads."""
         text = file_bytes.decode("utf-8", errors="replace").strip()
         if not text:
@@ -156,7 +156,7 @@ class DocumentProcessor:
     # ------------------------------------------------------------------
 
     def _split_into_chunks(
-        self, pages: List[Tuple[str, int]]
+        self, pages: List[Tuple[str, int | None]]
     ) -> List[TextChunk]:
         """
         Split page texts into overlapping chunks using LangChain's splitter.

@@ -6,32 +6,24 @@ Orchestrates the full RAG pipeline:
   2. Build a grounded prompt (retrieved context + conversation history)
   3. Call Groq LLM via LangChain
   4. Return the answer + source chunks for display
-
-Why Groq?
-  - Completely free tier (generous rate limits)
-  - Extremely fast inference via custom LPU hardware
-  - Supports Llama 3, Mixtral, Gemma — all powerful open models
-  - Drop-in replacement for OpenAI client
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Dict, List, Optional, Any
-
+from typing import List, Optional
+from pydantic import SecretStr
 from langchain_groq import ChatGroq
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
 
 from services.vector_store import VectorStore
 from models.schemas import ChatMessage, ChatResponse, SourceChunk
 
 logger = logging.getLogger(__name__)
 
-# Default Groq model — llama-3.1-70b-versatile gives the best quality/speed ratio
 DEFAULT_MODEL = "llama-3.1-70b-versatile"
 
-# System prompt that instructs the LLM to stay grounded in retrieved context
 SYSTEM_PROMPT = """You are DocuMind, an expert document analyst AI assistant.
 
 Your job is to answer user questions **based only on the provided document context**.
@@ -49,11 +41,6 @@ Context from retrieved document chunks:
 
 
 class LLMService:
-    """
-    High-level RAG service.
-
-    Exposes a single `ask()` method that orchestrates retrieval + generation.
-    """
 
     def __init__(self):
         groq_api_key = os.getenv("GROQ_API_KEY")
@@ -65,22 +52,17 @@ class LLMService:
 
         model_name = os.getenv("GROQ_MODEL", DEFAULT_MODEL)
 
-        # Initialise the Groq LLM via LangChain
         self._llm = ChatGroq(
-            api_key=groq_api_key,
-            model_name=model_name,
-            temperature=0.1,        # low temperature for factual Q&A
-            max_tokens=2048,        # generous output limit
-            timeout=30,             # seconds before giving up
+            api_key=SecretStr(groq_api_key),
+            model=model_name,
+            temperature=0.1,
+            max_tokens=2048,
+            stop_sequences=None,
         )
 
         self._vector_store = VectorStore()
         self._model_name = model_name
         logger.info(f"LLMService initialised with model: {model_name}")
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     async def ask(
         self,
@@ -89,21 +71,8 @@ class LLMService:
         history: Optional[List[ChatMessage]] = None,
         top_k: int = 4,
     ) -> ChatResponse:
-        """
-        Full RAG pipeline: retrieve → augment → generate.
 
-        Args:
-            question: User's natural language question.
-            doc_ids:  Optional list of doc_ids to restrict retrieval to.
-            history:  Previous conversation turns for multi-turn context.
-            top_k:    How many document chunks to retrieve.
-
-        Returns:
-            ChatResponse with answer text + source chunks.
-        """
-        # ----------------------------------------------------------
         # Step 1: Retrieve relevant chunks from ChromaDB
-        # ----------------------------------------------------------
         raw_results = self._vector_store.similarity_search(
             query=question,
             top_k=top_k,
@@ -120,14 +89,13 @@ class LLMService:
                 model_used=self._model_name,
             )
 
-        # ----------------------------------------------------------
         # Step 2: Build context string from retrieved chunks
-        # ----------------------------------------------------------
         context_parts: List[str] = []
         for i, result in enumerate(raw_results, start=1):
+            page_num = result.get("page_number")
             page_info = (
-                f" (page {result['page_number']})"
-                if result.get("page_number") and result["page_number"] != -1
+                f" (page {page_num})"
+                if page_num is not None and page_num != -1
                 else ""
             )
             context_parts.append(
@@ -137,38 +105,38 @@ class LLMService:
 
         context_str = "\n\n---\n\n".join(context_parts)
 
-        # ----------------------------------------------------------
-        # Step 3: Build the message list for the LLM
-        # ----------------------------------------------------------
-        messages = [
+        # Step 3: Build message list for the LLM
+        messages: List[BaseMessage] = [
             SystemMessage(content=SYSTEM_PROMPT.format(context=context_str))
         ]
 
-        # Inject previous conversation turns for multi-turn support
         if history:
-            for turn in history[-6:]:  # keep last 6 turns to manage token budget
+            for turn in history[-6:]:
                 if turn.role == "user":
                     messages.append(HumanMessage(content=turn.content))
                 elif turn.role == "assistant":
                     messages.append(AIMessage(content=turn.content))
 
-        # Append the current user question
         messages.append(HumanMessage(content=question))
 
-        # ----------------------------------------------------------
-        # Step 4: Call the Groq LLM
-        # ----------------------------------------------------------
+        # Step 4: Call Groq LLM
         logger.info(
             f"Calling Groq ({self._model_name}) | chunks={len(raw_results)} | "
             f"history_turns={len(history or [])}"
         )
 
         response = await self._llm.ainvoke(messages)
-        answer_text = response.content
 
-        # ----------------------------------------------------------
-        # Step 5: Build SourceChunk objects for source highlighting
-        # ----------------------------------------------------------
+        # Handle response.content being a list in newer LangChain versions
+        if isinstance(response.content, list):
+            answer_text = " ".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in response.content
+            )
+        else:
+            answer_text = response.content
+
+        # Step 5: Build SourceChunk objects
         sources = [
             SourceChunk(
                 chunk_id=r["chunk_id"],
