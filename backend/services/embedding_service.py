@@ -1,71 +1,39 @@
 """
 services/embedding_service.py
 ==============================
-Generates vector embeddings using a locally-run HuggingFace sentence-transformer.
-Model: all-MiniLM-L6-v2 — 384-dim, ~22MB, free, runs on CPU.
+Uses ChromaDB's built-in ONNX embedding function.
+No torch. No sentence-transformers. Fast startup.
 """
 from __future__ import annotations
 
 import logging
-import os
-from functools import lru_cache
-from typing import List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+_embedding_fn = None
+
+
+def _get_embedding_fn():
+    global _embedding_fn
+    if _embedding_fn is None:
+        from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
+        _embedding_fn = ONNXMiniLM_L6_V2()
+        logger.info("ONNX embedding function loaded")
+    return _embedding_fn
 
 
 class EmbeddingService:
-    """
-    Wraps HuggingFaceEmbeddings with LAZY loading.
-    Model is NOT downloaded on __init__ — only on first embed call.
-    This prevents Render port-scan timeout on startup.
-    """
-
-    def __init__(self, model_name: Optional[str] = None):
-        # FIX: store model name only — do NOT load model here
-        self._model_name = model_name or os.getenv(
-            "EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
-        )
-        self._model = None  # loaded lazily on first use
-        logger.debug(f"EmbeddingService created (model not loaded yet): {self._model_name}")
-
-    def _get_or_load_model(self):
-        """Load model on first call — cached at module level after that."""
-        if self._model is None:
-            self._model = _load_model(self._model_name)
-        return self._model
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """Embed a batch of text strings."""
         if not texts:
             return []
-        model = self._get_or_load_model()
-        embeddings = model.embed_documents(texts)
-        logger.debug(f"Embedded {len(texts)} text(s) → dim={len(embeddings[0])}")
-        return embeddings
+        fn = _get_embedding_fn()
+        # ChromaDB embedding functions accept a list and return a list
+        result = fn(texts)
+        return [list(map(float, e)) for e in result]
 
     def embed_query(self, query: str) -> List[float]:
-        """Embed a single query string."""
-        model = self._get_or_load_model()
-        embedding = model.embed_query(query)
-        logger.debug(f"Embedded query → dim={len(embedding)}")
-        return embedding
-
-
-@lru_cache(maxsize=4)
-def _load_model(model_name: str):
-    """
-    Load HuggingFace model — cached at process level via lru_cache.
-    Runs only once per model name no matter how many times it's called.
-    """
-    # Import here so it does NOT run at module import time
-    from langchain_community.embeddings import HuggingFaceEmbeddings
-
-    logger.info(f"Loading embedding model '{model_name}' (downloading if needed)...")
-    return HuggingFaceEmbeddings(
-        model_name=model_name,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True},
-    )
+        fn = _get_embedding_fn()
+        result = fn([query])
+        return list(map(float, result[0]))
